@@ -209,11 +209,10 @@ class Transformer(tf.keras.Model):
 
 
 
-    def fit_model(self, train_english, train_russian, valid_english, 
-                  valid_russian, epochs=int, model_name=str,
+    def fit_model(self, dataset, valid_dataset, epochs=int, model_name=str,
                   save_model_each_epoch=True,
                   shuffle=False, session_name=str,
-                  save_path_epoch='results/epoch_models',
+                  save_path_epoch=os.path.join('results/epoch_models'),
                   final_save_path='results/final_weights',
                   batch_size=32, gradient_accumulation_steps=1):
         """
@@ -225,10 +224,8 @@ class Transformer(tf.keras.Model):
 
 
         epochs = 50
-        model.fit_model(train_english, 
-                        train_russian,
-                        valid_english,
-                        valid_russian,
+        model.fit_model(dataset,
+                        valid_dataset,
                         epochs=epochs,
                         save_model_each_epoch=True,
                         shuffle=False
@@ -255,39 +252,35 @@ class Transformer(tf.keras.Model):
 
         # Shuffle the training data
         if shuffle:
-            combined = list(zip(train_english, train_russian))
+            combined = list(zip(*dataset))
             random.shuffle(combined)
-            train_english, train_russian = zip(*combined)
-            train_english = list(train_english)
-            train_russian = list(train_russian)
+            dataset = list(zip(*combined))
 
-        num_batches = len(train_english) // batch_size
-        remainder = len(train_english) % batch_size
+        num_batches = len(dataset[0]) // batch_size
+        remainder = len(dataset[0]) % batch_size
         if remainder > 0:
             num_batches += 1
 
         for epoch in tqdm(range(epochs)):
             epoch += 1
             # Ensure the data is in the correct format before creating masks
-            train_english_tensor = tf.convert_to_tensor([x for x in train_english], dtype=tf.int32)
-            train_russian_tensor = tf.convert_to_tensor([x for x in train_russian], dtype=tf.int32)
-            enc_padding_mask, combined_mask, dec_padding_mask = self.create_masks(train_english_tensor, train_russian_tensor)
+            train_tensor = [tf.convert_to_tensor([x for x in data], dtype=tf.int32) for data in dataset]
+            enc_padding_mask, combined_mask, dec_padding_mask = self.create_masks(*train_tensor)
             
             total_loss = 0
             for batch in range(num_batches):
                 start = batch * batch_size
                 end = start + batch_size
-                if end > len(train_english):
-                    end = len(train_english)
-                train_english_batch = train_english_tensor[start:end]
-                train_russian_batch = train_russian_tensor[start:end]
+                if end > len(dataset[0]):
+                    end = len(dataset[0])
+                train_batch = [data[start:end] for data in train_tensor]
                 enc_padding_mask_batch = enc_padding_mask[start:end]
                 combined_mask_batch = combined_mask[start:end]
                 dec_padding_mask_batch = dec_padding_mask[start:end]
                 
                 with tf.GradientTape() as tape:
-                    predictions, _ = self.call(train_english_batch, train_russian_batch, True, enc_padding_mask_batch, combined_mask_batch, dec_padding_mask_batch)
-                    loss = self.loss(train_russian_batch, predictions)
+                    predictions, _ = self.call(*train_batch, True, enc_padding_mask_batch, combined_mask_batch, dec_padding_mask_batch)
+                    loss = self.loss(train_batch[1], predictions)
                     total_loss += loss
                 
                 if (batch + 1) % gradient_accumulation_steps == 0:
@@ -296,16 +289,15 @@ class Transformer(tf.keras.Model):
                     total_loss = 0
                 
                 if len(self.metrics) > 0:
-                    self.metrics[0].update_state(train_russian_batch, predictions)
+                    self.metrics[0].update_state(train_batch[1], predictions)
             
             # Validation
-            valid_english_tensor = tf.convert_to_tensor([x for x in valid_english], dtype=tf.int32)
-            valid_russian_tensor = tf.convert_to_tensor([x for x in valid_russian], dtype=tf.int32)
-            enc_padding_mask_valid, combined_mask_valid, dec_padding_mask_valid = self.create_masks(valid_english_tensor, valid_russian_tensor)
-            predictions_valid, _ = self.call(valid_english_tensor, valid_russian_tensor, False, enc_padding_mask_valid, combined_mask_valid, dec_padding_mask_valid)
-            loss_valid = self.loss(valid_russian_tensor, predictions_valid)
+            valid_tensor = [tf.convert_to_tensor([x for x in data], dtype=tf.int32) for data in valid_dataset]
+            enc_padding_mask_valid, combined_mask_valid, dec_padding_mask_valid = self.create_masks(*valid_tensor)
+            predictions_valid, _ = self.call(*valid_tensor, False, enc_padding_mask_valid, combined_mask_valid, dec_padding_mask_valid)
+            loss_valid = self.loss(valid_tensor[1], predictions_valid)
             if len(self.metrics) > 1:
-                self.metrics[1].update_state(valid_russian_tensor, predictions_valid)
+                self.metrics[1].update_state(valid_tensor[1], predictions_valid)
             tf.compat.v1.logging.log(tf.compat.v1.logging.INFO, 'Epoch {} Loss {:.4f} Validation Loss {:.4f}'.format(epoch, total_loss, loss_valid))# Beam search
             beam_search_result = self.beam_search_decoder(predictions_valid.numpy().tolist()[0], 3)
             tf.compat.v1.logging.log(tf.compat.v1.logging.INFO, f'Beam search result: {beam_search_result}')
