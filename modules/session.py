@@ -25,9 +25,9 @@ class SessionCreator:
         os.makedirs(path, exist_ok=True)
         return path
     
-    def save_data_to_yaml(self, data):
-        with open(data, 'w') as f:
-            yaml.dump(self.metadata, f)
+    def save_data_to_yaml(self, data, filename):
+        with open(filename, 'w') as f:
+            yaml.dump(data, f)
     
     def create_metadata(self):
         # Creating metadata for use in training
@@ -45,7 +45,7 @@ class SessionCreator:
                 yaml.dump(metadata, f)
     
     def get_metadata(self):
-        name = f'{self.session_name}/metadata_session.yaml'
+        name = f'{self.session_name}/metadata.yaml'
         with open(name, 'r') as f:
             metadata = yaml.load(f, Loader=yaml.FullLoader)
         return metadata

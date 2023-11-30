@@ -36,8 +36,8 @@ class DataGenerator:
         english_sequences = self.tokenizer_english.texts_to_sequences(english_data)
         russian_padded = pad_sequences(russian_sequences, padding=self.padding_type, truncating=self.trunc_type)
         english_padded = pad_sequences(english_sequences, padding=self.padding_type, truncating=self.trunc_type)
-        russian_data = [tf.expand_dims(p, -1) for p in russian_padded]  # Add an extra dimension at the end to avoid ValueError
-        english_data = [tf.expand_dims(p, -1) for p in english_padded]  # Add an extra dimension at the end to avoid ValueError
+        russian_data = [tf.expand_dims(p, 0) for p in russian_padded]  # Add an extra dimension at the beginning to avoid ValueError
+        english_data = [tf.expand_dims(p, 0) for p in english_padded]  # Add an extra dimension at the beginning to avoid ValueError
         return russian_data, english_data
 
     def generate(self):

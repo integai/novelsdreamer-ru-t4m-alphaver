@@ -187,9 +187,9 @@ class Transformer(tf.keras.Model):
         self.regularized_layer = regularized_layer if regularized_layer is not None else tf.keras.layers.Layer()
 
     def call(self, inp, tar, training, enc_padding_mask, look_ahead_mask, dec_padding_mask):
-        enc_output = self.encoder(inp, training, enc_padding_mask)
-        dec_output, attention_weights = self.decoder(tar, enc_output, training, look_ahead_mask, dec_padding_mask)
-        final_output = self.final_layer(dec_output)
+        enc_output = self.encoder(inp, training, enc_padding_mask)  # (batch_size, inp_seq_len, d_model)
+        dec_output, attention_weights = self.decoder(tar, enc_output, training, look_ahead_mask, dec_padding_mask)  # (batch_size, tar_seq_len, d_model)
+        final_output = self.final_layer(dec_output)  # (batch_size, tar_seq_len, target_vocab_size)
         if self.regularized_layer is not None:
             final_output = self.regularized_layer(final_output)
         return final_output, attention_weights
@@ -226,7 +226,7 @@ class Transformer(tf.keras.Model):
         metadata_session = session_creator.get_metadata() if session_creator else None
         # Create a log file
         log_file_name = f'training_logs_{session_name}.txt' if session_name else 'training_logs.txt'
-        log_file_path = os.path.join(metadata_session['logs_path'], log_file_name) if metadata_session else log_file_name
+        log_file_path = os.path.join(metadata_session['logs_path'], log_file_name) if metadata_session and 'logs_path' in metadata_session else log_file_name
         log_file = open(log_file_path, "w")
         
         with open(log_file_path, 'a') as log_file:
@@ -246,7 +246,7 @@ class Transformer(tf.keras.Model):
             }
         }
         if session_creator:
-            session_creator.save_data_to_yaml(metadata)
+            session_creator.save_data_to_yaml(metadata, os.path.join(session_creator.session_name, 'metadata.yaml'))
 
         # Shuffle the training data
         if shuffle:
@@ -259,6 +259,8 @@ class Transformer(tf.keras.Model):
             epoch += 1
             total_loss = 0
             for (batch, (inp, tar)) in enumerate(zip(inp_dataset, tar_dataset)):
+                inp = tf.expand_dims(inp, 0)
+                tar = tf.expand_dims(tar, 0)
                 enc_padding_mask, combined_mask, dec_padding_mask = self.create_masks(inp, tar)
                 
                 with tf.GradientTape() as tape:
@@ -278,6 +280,8 @@ class Transformer(tf.keras.Model):
             valid_inp_dataset = tf.data.Dataset.from_tensor_slices(valid_inp_dataset).batch(batch_size)
             valid_tar_dataset = tf.data.Dataset.from_tensor_slices(valid_tar_dataset).batch(batch_size)
             for (valid_inp, valid_tar) in zip(valid_inp_dataset, valid_tar_dataset):
+                valid_inp = tf.expand_dims(valid_inp, 0)
+                valid_tar = tf.expand_dims(valid_tar, 0)
                 enc_padding_mask, combined_mask, dec_padding_mask = self.create_masks(valid_inp, valid_tar)
                 predictions, _ = self.call(valid_inp, valid_tar, False, enc_padding_mask, combined_mask, dec_padding_mask)
                 loss = self.loss_function(valid_tar, predictions)
@@ -338,6 +342,7 @@ class Transformer(tf.keras.Model):
         """
         mask = 1 - tf.linalg.band_part(tf.ones((size, size)), -1, 0)
         return mask
+
 
 
 
