@@ -195,7 +195,6 @@ class Transformer(tf.keras.Model):
         return final_output, attention_weights
 
 
-    #TODO: Rework fit_model function.
     def fit_model(self, inp_dataset, tar_dataset, valid_inp_dataset, valid_tar_dataset, epochs, model_name,
                   save_model_each_epoch=True,
                   shuffle=False, session_name=None,
