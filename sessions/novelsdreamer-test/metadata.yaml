@@ -1,0 +1,9 @@
+train_parameters:
+  batch_size: 64
+  final_save_path: results/final_weights
+  gradient_accumulation_steps: 5
+  model_name: novelsdreamer-ru-t4m
+  save_model_each_epoch: true
+  save_path_epoch: results/epoch_models
+  session_name: novelsdreamer-test
+  shuffle: true
